@@ -21,7 +21,7 @@
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script>
-// ================= MD5 (pure JS) =================
+// ===== MD5 (pure JS) =====
 function md5(buffer) {
   function rhex(n){let s="";for(let j=0;j<4;j++)s+=("0"+((n>>(j*8))&255).toString(16)).slice(-2);return s;}
   function cmn(q,a,b,x,s,t){a=(a+q+x+t)&0xffffffff;return(((a<<s)|(a>>>(32-s)))+b)&0xffffffff;}
@@ -51,23 +51,20 @@ function md5(buffer) {
   return x.map(rhex).join("");
 }
 
-// ================= EMBEDDED TEMPLATE SB3 =================
-// Replace this string with your song.sb3 Base64 (I can generate it for you)
-const TEMPLATE_SB3_BASE64 = `PASTE_YOUR_SONG_SB3_BASE64_HERE`;
-
-// ================= BUILD =================
+// ===== MAIN =====
 async function build() {
   try {
     const img = document.getElementById("image").files[0];
     const aud = document.getElementById("audio").files[0];
     if (!img || !aud) throw "Upload both image and audio.";
 
-    // Decode Base64 SB3
-    const binary = atob(TEMPLATE_SB3_BASE64.replace(/\s+/g,""));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    // Fetch the template SB3 from GitHub
+    const res = await fetch(
+      "https://github.com/funnyimage/funnyimage.github.io/raw/refs/heads/main/song.sb3"
+    );
+    if (!res.ok) throw "Failed to download template SB3";
 
-    const zip = await JSZip.loadAsync(bytes);
+    const zip = await JSZip.loadAsync(await res.arrayBuffer());
     const project = JSON.parse(await zip.file("project.json").async("text"));
 
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
