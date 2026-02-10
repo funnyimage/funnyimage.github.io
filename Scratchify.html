@@ -1,24 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Scratch Song Builder with Song Names</title>
+<title>Scratch Song Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-body { font-family: sans-serif; padding: 20px; }
-#search-bar { width: 300px; padding: 5px; }
-#song-grid { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 10px; }
-.song-card { width: 120px; cursor: pointer; text-align: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
-.song-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; }
-.song-name { font-size: 12px; font-weight: bold; margin-top: 5px; }
-.artist-name { font-size: 11px; color: gray; }
+/* ===== RESET & BASE ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Roboto', sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; min-height: 100vh; padding: 40px; display: flex; flex-direction: column; align-items: center; transition: background 0.5s; }
+h2 { font-size: 2rem; margin-bottom: 20px; text-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+
+/* ===== SEARCH BAR ===== */
+#search-bar { width: 300px; padding: 12px 16px; border-radius: 30px; border: none; outline: none; font-size: 1rem; transition: all 0.3s; margin-right: 10px; }
+#search-bar:focus { box-shadow: 0 0 12px rgba(255,255,255,0.6); }
+
+button { padding: 12px 20px; border: none; border-radius: 30px; background: #ff758c; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+button:hover { background: #ff7eb3; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+
+/* ===== SONG GRID ===== */
+#song-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; margin-top: 30px; }
+
+/* ===== SONG CARD ===== */
+.song-card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 15px; overflow: hidden; cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; text-align: center; padding-bottom: 10px; }
+.song-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0,0,0,0.4); }
+
+.song-card img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; margin-top: 10px; transition: transform 0.3s; }
+.song-card img:hover { transform: scale(1.05); }
+
+.song-name { font-size: 14px; font-weight: 700; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artist-name { font-size: 12px; color: #ddd; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 500px) {
+  #search-bar { width: 70%; margin-bottom: 10px; }
+  button { width: 70%; }
+}
 </style>
 </head>
 <body>
 
-<h2>Scratch Song Builder</h2>
+<h2>🎵 Scratch Song Builder</h2>
 
-<input type="text" id="search-bar" placeholder="Search songs or artists">
-<button onclick="searchSongs()">Search</button>
+<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; max-width:400px;">
+  <input type="text" id="search-bar" placeholder="Search songs or artists">
+  <button onclick="searchSongs()">Search</button>
+</div>
 
 <div id="song-grid"></div>
 
@@ -53,7 +79,7 @@ async function searchSongs() {
     const card = document.createElement("div");
     card.className = "song-card";
     card.innerHTML = `
-      <img src="${song.artworkUrl100}" />
+      <img src="${song.artworkUrl100}" alt="Cover art"/>
       <div class="song-name">${song.trackName}</div>
       <div class="artist-name">${song.artistName}</div>
     `;
@@ -62,55 +88,39 @@ async function searchSongs() {
   });
 }
 
-// ===== Generate SB3 with sanitized song name =====
+// ===== Generate SB3 =====
 async function generateSB3(audioUrl, coverUrl, songName) {
   try {
-    // Fetch template SB3 from same folder
     const res = await fetch("song.sb3");
     if(!res.ok) throw "Could not fetch song.sb3 from same folder";
     const sb3Bytes = await res.arrayBuffer();
     const zip = await JSZip.loadAsync(sb3Bytes);
     const project = JSON.parse(await zip.file("project.json").async("text"));
-
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
     if(!sprite) throw "No sound sprite found";
 
-    // Fetch audio (iTunes previews are .m4a, rename to .mp3)
     const audioRes = await fetch(audioUrl);
     const audioBuf = await audioRes.arrayBuffer();
     const audioHash = md5(audioBuf);
-    Object.assign(sprite.sounds[0], {
-      assetId: audioHash,
-      md5ext: `${audioHash}.mp3`,
-      dataFormat: "mp3"
-    });
+    Object.assign(sprite.sounds[0], { assetId: audioHash, md5ext: `${audioHash}.mp3`, dataFormat: "mp3" });
     zip.file(`${audioHash}.mp3`, audioBuf);
 
-    // Fetch cover image
     const imgRes = await fetch(coverUrl);
     const imgBuf = await imgRes.arrayBuffer();
-    const imgExt = coverUrl.split('.').pop().split('?')[0]; // remove query params
+    const imgExt = coverUrl.split('.').pop().split('?')[0];
     const imgHash = md5(imgBuf);
-    Object.assign(sprite.costumes[0], {
-      assetId: imgHash,
-      md5ext: `${imgHash}.${imgExt}`,
-      dataFormat: imgExt
-    });
+    Object.assign(sprite.costumes[0], { assetId: imgHash, md5ext: `${imgHash}.${imgExt}`, dataFormat: imgExt });
     zip.file(`${imgHash}.${imgExt}`, imgBuf);
 
     zip.file("project.json", JSON.stringify(project, null, 2));
-
-    // Sanitize song name for filename
     const safeName = songName.replace(/[\/\\:*?"<>|]/g, "_");
 
     saveAs(await zip.generateAsync({type:"blob"}), `${safeName}.sb3`);
-
   } catch(e) {
     alert("ERROR: " + e);
     console.error(e);
   }
 }
 </script>
-
 </body>
 </html>
