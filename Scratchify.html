@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Scratch Song Builder (Safe Audio)</title>
+<title>Scratch Song Builder with Song Names</title>
 <style>
 body { font-family: sans-serif; padding: 20px; }
 #search-bar { width: 300px; padding: 5px; }
@@ -26,7 +26,7 @@ body { font-family: sans-serif; padding: 20px; }
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script>
-// PURE JS MD5
+// ===== PURE JS MD5 =====
 function md5(buffer) {
   function rhex(n){let s="";for(let j=0;j<4;j++)s+=("0"+((n>>(j*8))&255).toString(16)).slice(-2);return s;}
   function cmn(q,a,b,x,s,t){a=(a+q+x+t)&0xffffffff;return(((a<<s)|(a>>>(32-s)))+b)&0xffffffff;}
@@ -38,7 +38,7 @@ function md5(buffer) {
   const bytes=new Uint8Array(buffer),data=[];for(let i=0;i<bytes.length;i++)data[i>>2]|=bytes[i]<<((i%4)*8);data[bytes.length>>2]|=0x80<<((bytes.length%4)*8);data[((bytes.length+8)>>6)*16+14]=bytes.length*8;const x=[1732584193,-271733879,-1732584194,271733878];for(let i=0;i<data.length;i+=16)md5cycle(x,data.slice(i,i+16));return x.map(rhex).join("");
 }
 
-// ============== Search Songs using iTunes API ==========
+// ===== Search songs using iTunes API =====
 async function searchSongs() {
   const term = document.getElementById("search-bar").value;
   if(!term) return;
@@ -57,16 +57,17 @@ async function searchSongs() {
       <div class="song-name">${song.trackName}</div>
       <div class="artist-name">${song.artistName}</div>
     `;
-    card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100);
+    card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100, song.trackName);
     grid.appendChild(card);
   });
 }
 
-// ============== Generate SB3 ==========
-async function generateSB3(audioUrl, coverUrl) {
+// ===== Generate SB3 with sanitized song name =====
+async function generateSB3(audioUrl, coverUrl, songName) {
   try {
     // Fetch template SB3 from same folder
     const res = await fetch("song.sb3");
+    if(!res.ok) throw "Could not fetch song.sb3 from same folder";
     const sb3Bytes = await res.arrayBuffer();
     const zip = await JSZip.loadAsync(sb3Bytes);
     const project = JSON.parse(await zip.file("project.json").async("text"));
@@ -74,20 +75,18 @@ async function generateSB3(audioUrl, coverUrl) {
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
     if(!sprite) throw "No sound sprite found";
 
-    // Audio conversion: iTunes previews are .m4a, convert to .mp3 compatible for Scratch
-    // We'll use fetch -> arrayBuffer -> store as .mp3 (Scratch can sometimes accept .m4a renamed to .mp3)
+    // Fetch audio (iTunes previews are .m4a, rename to .mp3)
     const audioRes = await fetch(audioUrl);
     const audioBuf = await audioRes.arrayBuffer();
     const audioHash = md5(audioBuf);
-    const audioExt = "mp3"; // rename .m4a to .mp3 for Scratch
     Object.assign(sprite.sounds[0], {
       assetId: audioHash,
-      md5ext: `${audioHash}.${audioExt}`,
-      dataFormat: audioExt
+      md5ext: `${audioHash}.mp3`,
+      dataFormat: "mp3"
     });
-    zip.file(`${audioHash}.${audioExt}`, audioBuf);
+    zip.file(`${audioHash}.mp3`, audioBuf);
 
-    // Cover image
+    // Fetch cover image
     const imgRes = await fetch(coverUrl);
     const imgBuf = await imgRes.arrayBuffer();
     const imgExt = coverUrl.split('.').pop().split('?')[0]; // remove query params
@@ -100,7 +99,11 @@ async function generateSB3(audioUrl, coverUrl) {
     zip.file(`${imgHash}.${imgExt}`, imgBuf);
 
     zip.file("project.json", JSON.stringify(project, null, 2));
-    saveAs(await zip.generateAsync({type:"blob"}), "new-song.sb3");
+
+    // Sanitize song name for filename
+    const safeName = songName.replace(/[\/\\:*?"<>|]/g, "_");
+
+    saveAs(await zip.generateAsync({type:"blob"}), `${safeName}.sb3`);
 
   } catch(e) {
     alert("ERROR: " + e);
