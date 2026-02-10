@@ -10,14 +10,13 @@
 body { font-family: 'Roboto', sans-serif; background: #121212; color: #fff; min-height: 100vh; padding: 40px; display: flex; flex-direction: column; align-items: center; transition: background 0.5s; }
 h2 { font-size: 2rem; margin-bottom: 20px; color: #1DB954; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
 
-/* ===== SEARCH BAR ===== */
-#search-bar { width: 300px; padding: 12px 16px; border-radius: 30px; border: none; outline: none; font-size: 1rem; transition: all 0.3s; margin-right: 10px; background: #1e1e1e; color: #fff; }
+/* ===== CONTROLS ===== */
+.controls { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; max-width:600px; margin-bottom:20px; }
+#search-bar { flex:1; min-width:150px; padding: 12px 16px; border-radius: 30px; border: none; outline: none; font-size: 1rem; transition: all 0.3s; background: #1e1e1e; color: #fff; }
 #search-bar::placeholder { color: #888; }
 #search-bar:focus { box-shadow: 0 0 12px #1DB954; }
-
-/* ===== BUTTON ===== */
-button { padding: 12px 20px; border: none; border-radius: 30px; background: #1DB954; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-button:hover { background: #1ed760; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+select, button { padding: 12px 20px; border: none; border-radius: 30px; background: #1DB954; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+button:hover, select:hover { background: #1ed760; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 
 /* ===== SONG GRID ===== */
 #song-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; width: 100%; max-width: 1000px; margin-top: 30px; }
@@ -25,17 +24,14 @@ button:hover { background: #1ed760; transform: translateY(-2px); box-shadow: 0 5
 /* ===== SONG CARD ===== */
 .song-card { background: #1e1e1e; border-radius: 15px; overflow: hidden; cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; text-align: center; padding-bottom: 10px; }
 .song-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0,219,84,0.4); }
-
 .song-card img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; margin-top: 10px; transition: transform 0.3s; }
 .song-card img:hover { transform: scale(1.05); }
-
 .song-name { font-size: 14px; font-weight: 700; margin-top: 8px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .artist-name { font-size: 12px; color: #b3b3b3; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 500px) {
-  #search-bar { width: 70%; margin-bottom: 10px; }
-  button { width: 70%; }
+  #search-bar, select, button { width: 70%; margin-bottom: 10px; }
 }
 </style>
 </head>
@@ -43,8 +39,18 @@ button:hover { background: #1ed760; transform: translateY(-2px); box-shadow: 0 5
 
 <h2>Scratchify</h2>
 
-<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; max-width:400px;">
+<div class="controls">
   <input type="text" id="search-bar" placeholder="Search songs or artists">
+  <select id="genre-select">
+    <option value="">All Genres</option>
+    <option value="pop">Pop</option>
+    <option value="rock">Rock</option>
+    <option value="hip-hop">Hip-Hop/Rap</option>
+    <option value="electronic">Electronic</option>
+    <option value="country">Country</option>
+    <option value="jazz">Jazz</option>
+    <option value="classical">Classical</option>
+  </select>
   <button onclick="searchSongs()">Search</button>
 </div>
 
@@ -67,16 +73,27 @@ function md5(buffer) {
 }
 
 // ===== Search songs using iTunes API =====
-async function searchSongs() {
-  const term = document.getElementById("search-bar").value;
-  if(!term) return;
-  const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=20`);
-  const data = await res.json();
+async function searchSongs(term = "", genre = "") {
+  term = term || document.getElementById("search-bar").value;
+  genre = genre || document.getElementById("genre-select").value;
 
+  if(!term && !genre) return alert("Please enter a search or select a genre.");
+
+  const query = encodeURIComponent(term);
+  const genreQuery = genre ? `&genreIndex=1&entity=musicTrack&attribute=genreIndex&term=${encodeURIComponent(genre)}` : "";
+  const url = `https://itunes.apple.com/search?term=${query}&media=music&limit=20${genreQuery}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+  displaySongs(data.results);
+}
+
+// ===== Display songs =====
+function displaySongs(songs) {
   const grid = document.getElementById("song-grid");
   grid.innerHTML = "";
   
-  data.results.forEach(song => {
+  songs.forEach(song => {
     if(!song.previewUrl || !song.artworkUrl100) return;
     const card = document.createElement("div");
     card.className = "song-card";
@@ -85,7 +102,13 @@ async function searchSongs() {
       <div class="song-name">${song.trackName}</div>
       <div class="artist-name">${song.artistName}</div>
     `;
+    // Click song: generate SB3
     card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100, song.trackName);
+    // Click artist name: search all songs by artist
+    card.querySelector(".artist-name").onclick = e => {
+      e.stopPropagation();
+      searchSongs(song.artistName);
+    }
     grid.appendChild(card);
   });
 }
@@ -116,7 +139,6 @@ async function generateSB3(audioUrl, coverUrl, songName) {
 
     zip.file("project.json", JSON.stringify(project, null, 2));
     const safeName = songName.replace(/[\/\\:*?"<>|]/g, "_");
-
     saveAs(await zip.generateAsync({type:"blob"}), `${safeName}.sb3`);
   } catch(e) {
     alert("ERROR: " + e);
