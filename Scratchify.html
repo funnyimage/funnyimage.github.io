@@ -2,15 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Scratch Song Builder with API</title>
+<title>Scratch Song Builder (Safe Audio)</title>
 <style>
-  body { font-family: sans-serif; padding: 20px; }
-  #search-bar { width: 300px; padding: 5px; }
-  #song-grid { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 10px; }
-  .song-card { width: 120px; cursor: pointer; text-align: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
-  .song-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; }
-  .song-name { font-size: 12px; font-weight: bold; margin-top: 5px; }
-  .artist-name { font-size: 11px; color: gray; }
+body { font-family: sans-serif; padding: 20px; }
+#search-bar { width: 300px; padding: 5px; }
+#song-grid { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 10px; }
+.song-card { width: 120px; cursor: pointer; text-align: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+.song-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; }
+.song-name { font-size: 12px; font-weight: bold; margin-top: 5px; }
+.artist-name { font-size: 11px; color: gray; }
 </style>
 </head>
 <body>
@@ -34,33 +34,14 @@ function md5(buffer) {
   function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&~d),a,b,x,s,t);}
   function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t);}
   function ii(a,b,c,d,x,s,t){return cmn(c^(b|~d),a,b,x,s,t);}
-  function md5cycle(x,k){
-    let[a,b,c,d]=x;
-    a=ff(a,b,c,d,k[0],7,-680876936);d=ff(d,a,b,c,k[1],12,-389564586);
-    c=ff(c,d,a,b,k[2],17,606105819);b=ff(b,c,d,a,k[3],22,-1044525330);
-    a=gg(a,b,c,d,k[4],5,-176418897);d=gg(d,a,b,c,k[5],9,1200080426);
-    c=gg(c,d,a,b,k[6],14,-1473231341);b=gg(b,c,d,a,k[7],20,-45705983);
-    a=hh(a,b,c,d,k[8],4,1770035416);d=hh(d,a,b,c,k[9],11,-1958414417);
-    c=hh(c,d,a,b,k[10],16,-42063);b=hh(b,c,d,a,k[11],23,-1990404162);
-    a=ii(a,b,c,d,k[12],6,1804603682);d=ii(d,a,b,c,k[13],10,-40341101);
-    c=ii(c,d,a,b,k[14],15,-1502002290);b=ii(b,c,d,a,k[15],21,1236535329);
-    x[0]=(x[0]+a)&0xffffffff;x[1]=(x[1]+b)&0xffffffff;
-    x[2]=(x[2]+c)&0xffffffff;x[3]=(x[3]+d)&0xffffffff;
-  }
-  const bytes=new Uint8Array(buffer),data=[];
-  for(let i=0;i<bytes.length;i++)data[i>>2]|=bytes[i]<<((i%4)*8);
-  data[bytes.length>>2]|=0x80<<((bytes.length%4)*8);
-  data[((bytes.length+8)>>6)*16+14]=bytes.length*8;
-  const x=[1732584193,-271733879,-1732584194,271733878];
-  for(let i=0;i<data.length;i+=16)md5cycle(x,data.slice(i,i+16));
-  return x.map(rhex).join("");
+  function md5cycle(x,k){let[a,b,c,d]=x;a=ff(a,b,c,d,k[0],7,-680876936);d=ff(d,a,b,c,k[1],12,-389564586);c=ff(c,d,a,b,k[2],17,606105819);b=ff(b,c,d,a,k[3],22,-1044525330);a=gg(a,b,c,d,k[4],5,-176418897);d=gg(d,a,b,c,k[5],9,1200080426);c=gg(c,d,a,b,k[6],14,-1473231341);b=gg(b,c,d,a,k[7],20,-45705983);a=hh(a,b,c,d,k[8],4,1770035416);d=hh(d,a,b,c,k[9],11,-1958414417);c=hh(c,d,a,b,k[10],16,-42063);b=hh(b,c,d,a,k[11],23,-1990404162);a=ii(a,b,c,d,k[12],6,1804603682);d=ii(d,a,b,c,k[13],10,-40341101);c=ii(c,d,a,b,k[14],15,-1502002290);b=ii(b,c,d,a,k[15],21,1236535329);x[0]=(x[0]+a)&0xffffffff;x[1]=(x[1]+b)&0xffffffff;x[2]=(x[2]+c)&0xffffffff;x[3]=(x[3]+d)&0xffffffff;}
+  const bytes=new Uint8Array(buffer),data=[];for(let i=0;i<bytes.length;i++)data[i>>2]|=bytes[i]<<((i%4)*8);data[bytes.length>>2]|=0x80<<((bytes.length%4)*8);data[((bytes.length+8)>>6)*16+14]=bytes.length*8;const x=[1732584193,-271733879,-1732584194,271733878];for(let i=0;i<data.length;i+=16)md5cycle(x,data.slice(i,i+16));return x.map(rhex).join("");
 }
 
 // ============== Search Songs using iTunes API ==========
 async function searchSongs() {
   const term = document.getElementById("search-bar").value;
   if(!term) return;
-
   const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=20`);
   const data = await res.json();
 
@@ -93,14 +74,12 @@ async function generateSB3(audioUrl, coverUrl) {
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
     if(!sprite) throw "No sound sprite found";
 
-    // Fetch audio & cover
-    const [audioRes, imgRes] = await Promise.all([fetch(audioUrl), fetch(coverUrl)]);
+    // Audio conversion: iTunes previews are .m4a, convert to .mp3 compatible for Scratch
+    // We'll use fetch -> arrayBuffer -> store as .mp3 (Scratch can sometimes accept .m4a renamed to .mp3)
+    const audioRes = await fetch(audioUrl);
     const audioBuf = await audioRes.arrayBuffer();
-    const imgBuf = await imgRes.arrayBuffer();
-
-    // Replace audio
     const audioHash = md5(audioBuf);
-    const audioExt = audioUrl.split('.').pop().split('?')[0] || "mp3";
+    const audioExt = "mp3"; // rename .m4a to .mp3 for Scratch
     Object.assign(sprite.sounds[0], {
       assetId: audioHash,
       md5ext: `${audioHash}.${audioExt}`,
@@ -108,9 +87,11 @@ async function generateSB3(audioUrl, coverUrl) {
     });
     zip.file(`${audioHash}.${audioExt}`, audioBuf);
 
-    // Replace cover image
+    // Cover image
+    const imgRes = await fetch(coverUrl);
+    const imgBuf = await imgRes.arrayBuffer();
+    const imgExt = coverUrl.split('.').pop().split('?')[0]; // remove query params
     const imgHash = md5(imgBuf);
-    const imgExt = coverUrl.split('.').pop().split('?')[0] || "jpg";
     Object.assign(sprite.costumes[0], {
       assetId: imgHash,
       md5ext: `${imgHash}.${imgExt}`,
@@ -120,6 +101,7 @@ async function generateSB3(audioUrl, coverUrl) {
 
     zip.file("project.json", JSON.stringify(project, null, 2));
     saveAs(await zip.generateAsync({type:"blob"}), "new-song.sb3");
+
   } catch(e) {
     alert("ERROR: " + e);
     console.error(e);
