@@ -27,7 +27,7 @@ button:hover, select:hover { background: #1ed760; transform: translateY(-2px); b
 .song-card img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; margin-top: 10px; transition: transform 0.3s; }
 .song-card img:hover { transform: scale(1.05); }
 .song-name { font-size: 14px; font-weight: 700; margin-top: 8px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.artist-name { font-size: 12px; color: #b3b3b3; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artist-name { font-size: 12px; color: #b3b3b3; margin-top: 2px; cursor:pointer; text-decoration:underline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 500px) {
@@ -43,13 +43,13 @@ button:hover, select:hover { background: #1ed760; transform: translateY(-2px); b
   <input type="text" id="search-bar" placeholder="Search songs or artists">
   <select id="genre-select">
     <option value="">All Genres</option>
-    <option value="pop">Pop</option>
-    <option value="rock">Rock</option>
-    <option value="hip-hop">Hip-Hop/Rap</option>
-    <option value="electronic">Electronic</option>
-    <option value="country">Country</option>
-    <option value="jazz">Jazz</option>
-    <option value="classical">Classical</option>
+    <option value="Pop">Pop</option>
+    <option value="Rock">Rock</option>
+    <option value="Hip-Hop/Rap">Hip-Hop/Rap</option>
+    <option value="Electronic">Electronic</option>
+    <option value="Country">Country</option>
+    <option value="Jazz">Jazz</option>
+    <option value="Classical">Classical</option>
   </select>
   <button onclick="searchSongs()">Search</button>
 </div>
@@ -80,19 +80,22 @@ async function searchSongs(term = "", genre = "") {
   if(!term && !genre) return alert("Please enter a search or select a genre.");
 
   const query = encodeURIComponent(term);
-  const genreQuery = genre ? `&genreIndex=1&entity=musicTrack&attribute=genreIndex&term=${encodeURIComponent(genre)}` : "";
-  const url = `https://itunes.apple.com/search?term=${query}&media=music&limit=20${genreQuery}`;
-
+  const url = `https://itunes.apple.com/search?term=${query}&media=music&limit=30`;
   const res = await fetch(url);
   const data = await res.json();
-  displaySongs(data.results);
+
+  // Filter by genre if selected
+  let songs = data.results;
+  if(genre) songs = songs.filter(s => s.primaryGenreName === genre);
+
+  displaySongs(songs);
 }
 
 // ===== Display songs =====
 function displaySongs(songs) {
   const grid = document.getElementById("song-grid");
   grid.innerHTML = "";
-  
+
   songs.forEach(song => {
     if(!song.previewUrl || !song.artworkUrl100) return;
     const card = document.createElement("div");
@@ -104,13 +107,56 @@ function displaySongs(songs) {
     `;
     // Click song: generate SB3
     card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100, song.trackName);
-    // Click artist name: search all songs by artist
+
+    // Click artist: show profile
     card.querySelector(".artist-name").onclick = e => {
       e.stopPropagation();
-      searchSongs(song.artistName);
+      showArtistProfile(song.artistId);
     }
+
     grid.appendChild(card);
   });
+}
+
+// ===== Show artist profile =====
+async function showArtistProfile(artistId) {
+  try {
+    const res = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=song&limit=30`);
+    const data = await res.json();
+    if(data.resultCount === 0) return alert("No artist data found.");
+
+    const artist = data.results[0];
+    const songs = data.results.slice(1);
+
+    const grid = document.getElementById("song-grid");
+    grid.innerHTML = `
+      <div style="text-align:center; margin-bottom:20px;">
+        <img src="${artist.artworkUrl100 || ''}" style="border-radius:50%; width:150px; height:150px; margin-bottom:10px;"/>
+        <h3 style="color:#1DB954;">${artist.artistName}</h3>
+        <p style="color:#b3b3b3;">Genre: ${artist.primaryGenreName || 'Unknown'}</p>
+        <button onclick="searchSongs()">Back to search</button>
+      </div>
+    `;
+
+    songs.forEach(song => {
+      if(!song.previewUrl || !song.artworkUrl100) return;
+      const card = document.createElement("div");
+      card.className = "song-card";
+      card.innerHTML = `
+        <img src="${song.artworkUrl100}" alt="Cover art"/>
+        <div class="song-name">${song.trackName}</div>
+        <div class="artist-name">${song.artistName}</div>
+      `;
+      card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100, song.trackName);
+      // Click artist again: refresh profile
+      card.querySelector(".artist-name").onclick = e => { e.stopPropagation(); showArtistProfile(song.artistId); }
+      grid.appendChild(card);
+    });
+
+  } catch(e) {
+    alert("ERROR fetching artist: " + e);
+    console.error(e);
+  }
 }
 
 // ===== Generate SB3 =====
