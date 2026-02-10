@@ -2,26 +2,31 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Scratch Song Builder</title>
+<title>Scratch Song Builder with API</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; }
+  #search-bar { width: 300px; padding: 5px; }
+  #song-grid { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 10px; }
+  .song-card { width: 120px; cursor: pointer; text-align: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+  .song-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; }
+  .song-name { font-size: 12px; font-weight: bold; margin-top: 5px; }
+  .artist-name { font-size: 11px; color: gray; }
+</style>
 </head>
 <body>
 
 <h2>Scratch Song Builder</h2>
 
-<p>New Cover Image:</p>
-<input type="file" id="image" accept="image/*">
+<input type="text" id="search-bar" placeholder="Search songs or artists">
+<button onclick="searchSongs()">Search</button>
 
-<p>New Audio File:</p>
-<input type="file" id="audio" accept="audio/*">
-
-<br><br>
-<button onclick="build()">Build New SB3</button>
+<div id="song-grid"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script>
-// ============== PURE JS MD5 ==============
+// PURE JS MD5
 function md5(buffer) {
   function rhex(n){let s="";for(let j=0;j<4;j++)s+=("0"+((n>>(j*8))&255).toString(16)).slice(-2);return s;}
   function cmn(q,a,b,x,s,t){a=(a+q+x+t)&0xffffffff;return(((a<<s)|(a>>>(32-s)))+b)&0xffffffff;}
@@ -51,30 +56,51 @@ function md5(buffer) {
   return x.map(rhex).join("");
 }
 
-// ============== MAIN ==============
-async function build() {
+// ============== Search Songs using iTunes API ==========
+async function searchSongs() {
+  const term = document.getElementById("search-bar").value;
+  if(!term) return;
+
+  const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=20`);
+  const data = await res.json();
+
+  const grid = document.getElementById("song-grid");
+  grid.innerHTML = "";
+  
+  data.results.forEach(song => {
+    if(!song.previewUrl || !song.artworkUrl100) return;
+    const card = document.createElement("div");
+    card.className = "song-card";
+    card.innerHTML = `
+      <img src="${song.artworkUrl100}" />
+      <div class="song-name">${song.trackName}</div>
+      <div class="artist-name">${song.artistName}</div>
+    `;
+    card.onclick = () => generateSB3(song.previewUrl, song.artworkUrl100);
+    grid.appendChild(card);
+  });
+}
+
+// ============== Generate SB3 ==========
+async function generateSB3(audioUrl, coverUrl) {
   try {
-    const img = document.getElementById("image").files[0];
-    const aud = document.getElementById("audio").files[0];
-
-    if (!img || !aud) throw "Please select both image and audio.";
-
     // Fetch template SB3 from same folder
     const res = await fetch("song.sb3");
-    if (!res.ok) throw "Failed to load song.sb3 from same folder";
-
     const sb3Bytes = await res.arrayBuffer();
     const zip = await JSZip.loadAsync(sb3Bytes);
     const project = JSON.parse(await zip.file("project.json").async("text"));
 
-    // Find first sprite with a sound
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
-    if (!sprite) throw "No sound sprite found";
+    if(!sprite) throw "No sound sprite found";
 
-    // Replace sound
-    const audioBuf = await aud.arrayBuffer();
+    // Fetch audio & cover
+    const [audioRes, imgRes] = await Promise.all([fetch(audioUrl), fetch(coverUrl)]);
+    const audioBuf = await audioRes.arrayBuffer();
+    const imgBuf = await imgRes.arrayBuffer();
+
+    // Replace audio
     const audioHash = md5(audioBuf);
-    const audioExt = aud.name.split(".").pop();
+    const audioExt = audioUrl.split('.').pop().split('?')[0] || "mp3";
     Object.assign(sprite.sounds[0], {
       assetId: audioHash,
       md5ext: `${audioHash}.${audioExt}`,
@@ -83,9 +109,8 @@ async function build() {
     zip.file(`${audioHash}.${audioExt}`, audioBuf);
 
     // Replace cover image
-    const imgBuf = await img.arrayBuffer();
     const imgHash = md5(imgBuf);
-    const imgExt = img.name.split(".").pop();
+    const imgExt = coverUrl.split('.').pop().split('?')[0] || "jpg";
     Object.assign(sprite.costumes[0], {
       assetId: imgHash,
       md5ext: `${imgHash}.${imgExt}`,
@@ -94,8 +119,7 @@ async function build() {
     zip.file(`${imgHash}.${imgExt}`, imgBuf);
 
     zip.file("project.json", JSON.stringify(project, null, 2));
-    saveAs(await zip.generateAsync({ type:"blob" }), "new-song.sb3");
-
+    saveAs(await zip.generateAsync({type:"blob"}), "new-song.sb3");
   } catch(e) {
     alert("ERROR: " + e);
     console.error(e);
