@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Scratch Song Builder</title>
+</head>
+<body>
+
+<h2>Scratch Song Builder</h2>
+
+<p>New Cover Image:</p>
+<input type="file" id="image" accept="image/*">
+
+<p>New Audio File:</p>
+<input type="file" id="audio" accept="audio/*">
+
+<br><br>
+<button onclick="build()">Build New SB3</button>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+// ================= MD5 (pure JS, binary-safe) =================
+function md5(buffer) {
+  function rhex(n){let s="";for(let j=0;j<4;j++)s+=("0"+((n>>(j*8))&255).toString(16)).slice(-2);return s;}
+  function cmn(q,a,b,x,s,t){a=(a+q+x+t)&0xffffffff;return(((a<<s)|(a>>>(32-s)))+b)&0xffffffff;}
+  function ff(a,b,c,d,x,s,t){return cmn((b&c)|(~b&d),a,b,x,s,t);}
+  function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&~d),a,b,x,s,t);}
+  function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t);}
+  function ii(a,b,c,d,x,s,t){return cmn(c^(b|~d),a,b,x,s,t);}
+  function md5cycle(x,k){
+    let[a,b,c,d]=x;
+    a=ff(a,b,c,d,k[0],7,-680876936);d=ff(d,a,b,c,k[1],12,-389564586);
+    c=ff(c,d,a,b,k[2],17,606105819);b=ff(b,c,d,a,k[3],22,-1044525330);
+    a=gg(a,b,c,d,k[4],5,-176418897);d=gg(d,a,b,c,k[5],9,1200080426);
+    c=gg(c,d,a,b,k[6],14,-1473231341);b=gg(b,c,d,a,k[7],20,-45705983);
+    a=hh(a,b,c,d,k[8],4,1770035416);d=hh(d,a,b,c,k[9],11,-1958414417);
+    c=hh(c,d,a,b,k[10],16,-42063);b=hh(b,c,d,a,k[11],23,-1990404162);
+    a=ii(a,b,c,d,k[12],6,1804603682);d=ii(d,a,b,c,k[13],10,-40341101);
+    c=ii(c,d,a,b,k[14],15,-1502002290);b=ii(b,c,d,a,k[15],21,1236535329);
+    x[0]=(x[0]+a)&0xffffffff;x[1]=(x[1]+b)&0xffffffff;
+    x[2]=(x[2]+c)&0xffffffff;x[3]=(x[3]+d)&0xffffffff;
+  }
+  const bytes=new Uint8Array(buffer),data=[];
+  for(let i=0;i<bytes.length;i++)data[i>>2]|=bytes[i]<<((i%4)*8);
+  data[bytes.length>>2]|=0x80<<((bytes.length%4)*8);
+  data[((bytes.length+8)>>6)*16+14]=bytes.length*8;
+  const x=[1732584193,-271733879,-1732584194,271733878];
+  for(let i=0;i<data.length;i+=16)md5cycle(x,data.slice(i,i+16));
+  return x.map(rhex).join("");
+}
+
+// ================= MAIN =================
+async function build() {
+  const img = document.getElementById("image").files[0];
+  const aud = document.getElementById("audio").files[0];
+
+  if (!img || !aud) {
+    alert("Upload image and audio");
+    return;
+  }
+
+  // 🔥 Fetch template directly from GitHub
+  const response = await fetch(
+    "https://github.com/funnyimage/Scratchify/raw/refs/heads/main/song.sb3"
+  );
+  const sb3Bytes = await response.arrayBuffer();
+
+  const zip = await JSZip.loadAsync(sb3Bytes);
+  const project = JSON.parse(await zip.file("project.json").async("text"));
+
+  // find sprite that actually has the song
+  const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
+
+  // -------- replace sound --------
+  const audioBuf = await aud.arrayBuffer();
+  const audioHash = md5(audioBuf);
+  const audioExt = aud.name.split(".").pop();
+
+  const sound = sprite.sounds[0];
+  sound.assetId = audioHash;
+  sound.md5ext = `${audioHash}.${audioExt}`;
+  sound.dataFormat = audioExt;
+
+  zip.file(sound.md5ext, audioBuf);
+
+  // -------- replace cover image --------
+  const imgBuf = await img.arrayBuffer();
+  const imgHash = md5(imgBuf);
+  const imgExt = img.name.split(".").pop();
+
+  const costume = sprite.costumes[0];
+  costume.assetId = imgHash;
+  costume.md5ext = `${imgHash}.${imgExt}`;
+  costume.dataFormat = imgExt;
+
+  zip.file(costume.md5ext, imgBuf);
+
+  zip.file("project.json", JSON.stringify(project, null, 2));
+
+  const out = await zip.generateAsync({ type:"blob" });
+  saveAs(out, "new-song.sb3");
+}
+</script>
+
+</body>
+</html>
