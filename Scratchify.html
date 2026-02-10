@@ -21,7 +21,7 @@
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script>
-// ===== MD5 (pure JS) =====
+// ============== PURE JS MD5 ==============
 function md5(buffer) {
   function rhex(n){let s="";for(let j=0;j<4;j++)s+=("0"+((n>>(j*8))&255).toString(16)).slice(-2);return s;}
   function cmn(q,a,b,x,s,t){a=(a+q+x+t)&0xffffffff;return(((a<<s)|(a>>>(32-s)))+b)&0xffffffff;}
@@ -51,26 +51,27 @@ function md5(buffer) {
   return x.map(rhex).join("");
 }
 
-// ===== MAIN =====
+// ============== MAIN ==============
 async function build() {
   try {
     const img = document.getElementById("image").files[0];
     const aud = document.getElementById("audio").files[0];
-    if (!img || !aud) throw "Upload both image and audio.";
 
-    // Fetch the template SB3 from GitHub
-    const res = await fetch(
-      "https://github.com/funnyimage/funnyimage.github.io/raw/refs/heads/main/song.sb3"
-    );
-    if (!res.ok) throw "Failed to download template SB3";
+    if (!img || !aud) throw "Please select both image and audio.";
 
-    const zip = await JSZip.loadAsync(await res.arrayBuffer());
+    // Fetch template SB3 from same folder
+    const res = await fetch("song.sb3");
+    if (!res.ok) throw "Failed to load song.sb3 from same folder";
+
+    const sb3Bytes = await res.arrayBuffer();
+    const zip = await JSZip.loadAsync(sb3Bytes);
     const project = JSON.parse(await zip.file("project.json").async("text"));
 
+    // Find first sprite with a sound
     const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
     if (!sprite) throw "No sound sprite found";
 
-    // Replace audio
+    // Replace sound
     const audioBuf = await aud.arrayBuffer();
     const audioHash = md5(audioBuf);
     const audioExt = aud.name.split(".").pop();
@@ -94,6 +95,7 @@ async function build() {
 
     zip.file("project.json", JSON.stringify(project, null, 2));
     saveAs(await zip.generateAsync({ type:"blob" }), "new-song.sb3");
+
   } catch(e) {
     alert("ERROR: " + e);
     console.error(e);
