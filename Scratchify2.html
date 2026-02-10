@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Scratch Auto Upload</title>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+#search-bar { width: 300px; padding: 5px; }
+#song-grid { display: flex; flex-wrap: wrap; margin-top: 20px; gap: 10px; }
+.song-card { width: 120px; cursor: pointer; text-align: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; }
+.song-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 5px; }
+.song-name { font-size: 12px; font-weight: bold; margin-top: 5px; }
+.artist-name { font-size: 11px; color: gray; }
+</style>
+</head>
+<body>
+
+<h2>Scratch Auto Upload</h2>
+
+<input type="text" id="search-bar" placeholder="Search songs or artists">
+<button onclick="searchSongs()">Search</button>
+
+<div id="song-grid"></div>
+<div id="link"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+// MD5 function
+function md5(buffer){/* same as previous examples */}
+
+// Search songs
+async function searchSongs() {
+  const term = document.getElementById("search-bar").value;
+  if(!term) return;
+  const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=20`);
+  const data = await res.json();
+  const grid = document.getElementById("song-grid");
+  grid.innerHTML = "";
+
+  data.results.forEach(song => {
+    if(!song.previewUrl || !song.artworkUrl100) return;
+    const card = document.createElement("div");
+    card.className = "song-card";
+    card.innerHTML = `
+      <img src="${song.artworkUrl100}" />
+      <div class="song-name">${song.trackName}</div>
+      <div class="artist-name">${song.artistName}</div>
+    `;
+    card.onclick = () => sendToServer(song.previewUrl, song.artworkUrl100, song.trackName);
+    grid.appendChild(card);
+  });
+}
+
+// Generate SB3 and send to server
+async function sendToServer(audioUrl, coverUrl, songName){
+  try {
+    const res = await fetch("song.sb3");
+    const sb3Bytes = await res.arrayBuffer();
+    const zip = await JSZip.loadAsync(sb3Bytes);
+    const project = JSON.parse(await zip.file("project.json").async("text"));
+    const sprite = project.targets.find(t => !t.isStage && t.sounds?.length);
+
+    // Fetch audio & cover
+    const [audioRes, imgRes] = await Promise.all([fetch(audioUrl), fetch(coverUrl)]);
+    const audioBuf = await audioRes.arrayBuffer();
+    const imgBuf = await imgRes.arrayBuffer();
+
+    // Replace assets
+    const audioHash = md5(audioBuf);
+    Object.assign(sprite.sounds[0], {
+      assetId: audioHash,
+      md5ext: `${audioHash}.mp3`,
+      dataFormat: "mp3"
+    });
+    zip.file(`${audioHash}.mp3`, audioBuf);
+
+    const imgExt = coverUrl.split('.').pop().split('?')[0];
+    const imgHash = md5(imgBuf);
+    Object.assign(sprite.costumes[0], {
+      assetId: imgHash,
+      md5ext: `${imgHash}.${imgExt}`,
+      dataFormat: imgExt
+    });
+    zip.file(`${imgHash}.${imgExt}`, imgBuf);
+    zip.file("project.json", JSON.stringify(project, null, 2));
+
+    // Generate blob
+    const sb3Blob = await zip.generateAsync({type:"blob"});
+
+    // Send to server
+    const formData = new FormData();
+    formData.append("sb3", new Blob([sb3Blob], {type:"application/octet-stream"}));
+    formData.append("songName", songName);
+
+    const uploadRes = await fetch("/upload", {method:"POST", body: formData});
+    const json = await uploadRes.json();
+
+    document.getElementById("link").innerHTML = `<a href="${json.projectUrl}" target="_blank">View on Scratch</a>`;
+
+  } catch(e){ console.error(e); alert(e); }
+}
+</script>
+
+</body>
+</html>
